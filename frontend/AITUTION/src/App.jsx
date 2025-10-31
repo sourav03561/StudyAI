@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import Tabs from "./components/Tabs.jsx";
 import UploadCard from "./components/UploadCard.jsx";
 import SummaryView from "./components/SummaryView.jsx";
 import FlashcardsView from "./components/FlashcardsView.jsx";
 import Quiz from "./components/Quiz.jsx";
-import { BookOpen, Brain, ListChecks } from "lucide-react";
+import RecommendedVideos from "./components/RecommendedVideos.jsx";
+import { Brain } from "lucide-react";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("Summary");
@@ -21,6 +22,7 @@ export default function App() {
   const [keyPoints, setKeyPoints] = useState([]);
   const [flashcards, setFlashcards] = useState([]);
   const [quiz, setQuiz] = useState([]);
+  const [videos, setVideos] = useState([]); // <-- videos state
   const [rawText, setRawText] = useState("");
   const [ocrPages, setOcrPages] = useState([]);
   const [pageCount, setPageCount] = useState(0);
@@ -48,16 +50,17 @@ export default function App() {
     setRawText("");
     setOcrPages([]);
     setPageCount(0);
+    setVideos([]);
   }
 
-  async function call(path, form) {
+  async function callForm(path, form) {
     const res = await fetch(path, { method: "POST", body: form });
     const text = await res.text();
     if (!res.ok) throw new Error(`HTTP ${res.status} – ${text}`);
     return JSON.parse(text);
   }
 
-  // ONE action: generate everything together
+  // generate study pack (summary, key points, flashcards, quiz)
   async function onGeneratePack() {
     if (!file) {
       setErr("Please choose a PDF.");
@@ -75,18 +78,16 @@ export default function App() {
     try {
       const form = new FormData();
       form.append("file", file);
-      // faster defaults
       form.append("ocr_lang", "eng");
       form.append("dpi", "200");
       form.append("min_char_threshold", "120");
       form.append("psm", "6");
       form.append("prefer_blocks", "true");
-      // study pack knobs
       form.append("num_cards", "10");
       form.append("num_questions", "6");
       form.append("difficulty", "medium");
 
-      const json = await call("/api/study_material", form);
+      const json = await callForm("/api/study_material", form);
 
       setSummary(json.summary || "");
       setKeyTopics(Array.isArray(json.key_topics) ? json.key_topics : []);
@@ -97,13 +98,40 @@ export default function App() {
       setOcrPages(json.ocr_pages || []);
       setPageCount(json.page_count || 0);
 
-      setActiveTab("Summary"); // show Summary first
+      setActiveTab("Summary");
     } catch (e) {
       setErr(String(e));
     } finally {
       setLoading(false);
     }
   }
+
+  // fetch recommended videos when user opens the "Recommended Videos" tab (lazy)
+  useEffect(() => {
+    if (activeTab !== "Recommended Videos") return;
+    if (!keyPoints || keyPoints.length === 0) return;
+    if (videos && videos.length > 0) return; // already loaded
+
+    (async () => {
+      try {
+        const payload = { key_points: keyPoints.slice(0, 8), max_results: 8 };
+        const res = await fetch("/api/recommend_videos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const txt = await res.text();
+          console.error("Video API error:", res.status, txt);
+          return;
+        }
+        const json = await res.json();
+        setVideos(json.videos || []);
+      } catch (err) {
+        console.error("Failed to fetch videos:", err);
+      }
+    })();
+  }, [activeTab, keyPoints]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function startOver() {
     setFile(null);
@@ -112,61 +140,44 @@ export default function App() {
   }
 
   return (
-    <div className="container">
-      {/* Header */}
-      <div className="header" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, textAlign: "center" }}>
-  <h1 className="h1" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-    <Brain className="w-8 h-8 text-blue-600" />
-    StudyAI
-  </h1>        <div className="subtle">Create a study pack (key topics, key points, flashcards, quiz) from your PDF</div>
-      </div>
+    <div style={{ maxWidth: 1000, margin: "30px auto", padding: 12, fontFamily: "Inter, system-ui, Arial" }}>
+      <header style={{ textAlign: "center", marginBottom: 18 }}>
+        <h1 style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <Brain /> StudyAI
+        </h1>
+        <p style={{ marginTop: 6, color: "#555" }}>Create a study pack (summary, key points, flashcards, quiz) from a PDF</p>
+      </header>
 
-      {/* Tabs row – only after results; centered */}
       {hasResults && (
-        <div className="row" style={{ justifyContent: "center", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
           <Tabs value={activeTab} onChange={setActiveTab} />
         </div>
       )}
 
-      {/* Stats + reset */}
       {hasResults && (
-        <div className="row" style={{ justifyContent: "center", marginBottom: 12 }}>
-          <button className="btn secondary" onClick={startOver}>New PDF</button>
+        <div style={{ textAlign: "center", marginBottom: 12 }}>
+          <button onClick={startOver} style={{ padding: "8px 12px", borderRadius: 8 }}>New PDF</button>
         </div>
       )}
 
-      {/* Upload screen (no tabs shown) */}
       {!hasResults && (
-        <UploadCard
-          file={file}
-          setFile={setFile}
-          onGenerate={onGeneratePack}
-          loading={loading}
-        />
+        <UploadCard file={file} setFile={setFile} onGenerate={onGeneratePack} loading={loading} />
       )}
 
-      {/* Error */}
-      {err && (
-        <div className="card" style={{ borderColor: "#fecaca", background: "#fff1f2" }}>
-          {err}
-        </div>
-      )}
+      {err && <div style={{ background: "#fff1f0", border: "1px solid #fecaca", padding: 10, borderRadius: 8 }}>{err}</div>}
 
-      {/* Results screens */}
+      {/* Tab content */}
       {hasResults && activeTab === "Summary" && (
-        <SummaryView
-          fileName={fileName}
-          keyTopics={keyTopics}
-          keyPoints={keyPoints}
-          summary={summary}
-        />
+        <SummaryView fileName={fileName} keyTopics={keyTopics} keyPoints={keyPoints} summary={summary} />
       )}
 
-      {hasResults && activeTab === "Flashcards" && (
-        <FlashcardsView cards={flashcards} />
-      )}
+      {hasResults && activeTab === "Flashcards" && <FlashcardsView cards={flashcards} />}
 
       {hasResults && activeTab === "Quiz" && <Quiz quiz={quiz} />}
+
+      {hasResults && activeTab === "Recommended Videos" && (
+        <RecommendedVideos keyPoints={keyPoints} videos={videos} />
+      )}
     </div>
   );
 }
