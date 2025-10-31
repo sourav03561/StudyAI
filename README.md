@@ -17,7 +17,13 @@ An intelligent web app that extracts text from PDFs, summarizes key concepts, an
 **Backend:** Flask + PyMuPDF + Tesseract OCR  
 **AI:** Google Gemini API  
 **Video Source:** YouTube Data API (optional)  
+## Usage
 
+-Upload a PDF
+
+-Wait for AI summary & flashcards
+
+-View Recommended Videos in the final tab
 ## ⚙️ Setup
 
 ### 1. Clone & install
@@ -25,10 +31,4 @@ An intelligent web app that extracts text from PDFs, summarizes key concepts, an
 git clone https://github.com/yourname/studyai.git
 cd studyai
 
-## Usage
 
---Upload a PDF
-
---Wait for AI summary & flashcards
-
---View Recommended Videos in the final tab
