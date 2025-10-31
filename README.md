@@ -24,3 +24,11 @@ An intelligent web app that extracts text from PDFs, summarizes key concepts, an
 ```bash
 git clone https://github.com/yourname/studyai.git
 cd studyai
+
+## Usage
+
+--Upload a PDF
+
+--Wait for AI summary & flashcards
+
+--View Recommended Videos in the final tab
