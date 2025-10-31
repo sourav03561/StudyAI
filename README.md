@@ -30,7 +30,9 @@ An intelligent web app that extracts text from PDFs, summarizes key concepts, an
 ```bash
 git clone https://github.com/yourname/studyai.git
 cd studyai
+```bash
 ### 2. Backend setup
+```bash
 cd backend
 python -m venv venv
 source venv/bin/activate  # (Windows: venv\Scripts\activate)
@@ -38,8 +40,11 @@ pip install -r requirements.txt
 export GEMINI_API_KEY="your_gemini_key"
 export YOUTUBE_API_KEY="your_youtube_key"
 python app.py
+```bash
+```bash
 ### 3. Frontend setup
 cd ../frontend
 npm install
 npm run dev
+```bash
 Then open 👉 http://localhost:5173
