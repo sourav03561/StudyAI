@@ -1,4 +1,4 @@
-https://github.com/user-attachments/assets/1e01dbec-8522-4b87-b06c-9a9b686290ad
+https://github.com/user-attachments/assets/27fc77df-71bc-426e-8f4e-45ab196c5ac6
 # StudyAI — PDF to Smart Study Pack
 
 An intelligent web app that extracts text from PDFs, summarizes key concepts, and generates flashcards, quizzes, and recommended educational videos.
