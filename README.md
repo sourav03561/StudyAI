@@ -22,8 +22,9 @@ An intelligent web app that extracts text from PDFs, summarizes key concepts, an
 -Upload a PDF
 
 -Wait for AI summary & flashcards
-
+-Ask releated Question from pdf 
 -View Recommended Videos in the final tab
+
 ## ⚙️ Setup
 
 ### 1. Clone & install
