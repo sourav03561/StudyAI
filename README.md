@@ -10,7 +10,7 @@ An intelligent web app that extracts text from PDFs, summarizes key concepts, an
 - ✍️ Gemini AI–powered summary, key points & flashcards
 - 🧠 Auto–generated quiz questions
 - 🎥 Recommended YouTube videos based on key topics
-- <img width="12" height="12" alt="image" src="https://github.com/user-attachments/assets/a1c87e3f-9b19-423d-9218-dcbc975340bc" />Ask Questions from pdfs
+- <img width="20" height="20" alt="image" src="https://github.com/user-attachments/assets/a1c87e3f-9b19-423d-9218-dcbc975340bc" />Ask Questions from pdfs
 - 🌐 Built with Flask (backend) + React (frontend)
 
 ## 🛠️ Tech Stack
