@@ -6,6 +6,7 @@ import FlashcardsView from "./components/FlashcardsView.jsx";
 import Quiz from "./components/Quiz.jsx";
 import RecommendedVideos from "./components/RecommendedVideos.jsx";
 import { Brain } from "lucide-react";
+import AskQuestions from "./components/AskQuestions.jsx";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("Summary");
@@ -178,6 +179,10 @@ export default function App() {
       {hasResults && activeTab === "Recommended Videos" && (
         <RecommendedVideos keyPoints={keyPoints} videos={videos} />
       )}
+      {hasResults && activeTab === "Ask" && (
+        <AskQuestions pdfText={rawText} />
+        )}
+
     </div>
   );
 }

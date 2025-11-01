@@ -525,82 +525,178 @@ def api_study_material():
 @app.post("/api/recommend_videos")
 def api_recommend_videos():
     """
-    Smarter YouTube recommendations for study topics.
-    Now optimized for key_points input: expects short topic phrases joined into one query.
+    Improved recommend_videos:
+    - Accepts JSON/form with key_points (list) OR query/text
+    - Expands each short key-point into multiple educational search terms
+    - Collects results across variants, dedupes and filters by title/description
+    - Ranks by viewCount (if available) and returns top `max_results`
+    - Falls back to curated list when YouTube key missing or API fails
     """
-    incoming = request.get_json(silent=True) or request.form or {}
-    # Combine key points list into a compact query string if provided
-    key_points = incoming.get("key_points")
-    if isinstance(key_points, list):
-        query = ", ".join(key_points[:5])  # limit to 5 key points
-    else:
-        query = (incoming.get("query") or incoming.get("text") or "").strip()
+    data = request.get_json(silent=True) or request.form or {}
+    max_results = int(data.get("max_results") or 6)
 
-    max_results = int(incoming.get("max_results") or 6)
+    # Derive a compact query string if key_points provided (limit to first 8)
+    key_points = data.get("key_points")
+    if isinstance(key_points, list) and len(key_points) > 0:
+        # Keep the raw list for multi-query expansion below
+        kp_list = [str(k).strip() for k in key_points if str(k).strip()]
+    else:
+        kp_list = []
+
+    # If no key_points, fall back to query/text string
+    query_str = ""
+    if not kp_list:
+        query_str = (data.get("query") or data.get("text") or "").strip()
+
     youtube_key = os.getenv("YOUTUBE_API_KEY")
 
-    def build_search_terms(q: str) -> list[str]:
-        q = q.strip()
-        if not q:
-            return ["learning basics tutorial", "introduction to science"]
-        base = q.lower()
-        variants = [
+    # Small helper: generate educational query variants for a short phrase
+    def _variants_for_phrase(phrase: str):
+        p = phrase.strip()
+        if not p:
+            return []
+        base = p.lower()
+        return [
             f"{base} tutorial",
             f"{base} explained",
-            f"{base} full course",
             f"{base} lecture",
-            f"{base} for beginners",
-            f"{base} complete guide",
-            f"{base} class",
             f"{base} crash course",
+            f"{base} for beginners",
+            f"{base} overview",
+            f"{base} full course",
         ]
-        seen, out = set(), []
-        for v in variants:
-            if v not in seen:
-                seen.add(v)
-                out.append(v)
-        return out
 
-    def is_relevant_title(title: str) -> bool:
-        if not title:
+    # Relevance filter for titles/descriptions (allow if any keep keyword present and none of the ban words)
+    KEEP = ["tutorial", "course", "lesson", "lecture", "explained", "learn", "introduction", "guide", "how to", "overview", "crash course"]
+    BAN = ["funny", "shorts", "reaction", "music", "meme", "song", "asmr", "review (unboxing)"]
+
+    def _is_relevant(video_obj: dict) -> bool:
+        title = (video_obj.get("title") or "").lower()
+        desc = (video_obj.get("description") or "").lower()
+        text = title + " " + desc
+        if any(b in text for b in BAN):
             return False
-        t = title.lower()
-        keep = ["tutorial", "course", "lesson", "lecture", "explained", "learn", "introduction", "training"]
-        ban = ["funny", "shorts", "reaction", "music", "meme", "song", "asmr"]
-        return any(k in t for k in keep) and not any(b in t for b in ban)
+        return any(k in text for k in KEEP)
 
-    videos = []
-    if youtube_key and query:
-        try:
+    # Collect videos by iterating variants for each key point (or single query)
+    collected = []
+    seen_ids = set()
+    try:
+        if youtube_key:
+            # If we have multiple key points, query each separately (gives more focused results)
+            queries = []
+            if kp_list:
+                for kp in kp_list[:8]:
+                    queries.extend(_variants_for_phrase(kp))
+            else:
+                # if no kp_list but a query string exists, expand it a little
+                base_q = query_str or ""
+                if base_q:
+                    queries = _variants_for_phrase(base_q) or [base_q]
+            # Limit repeated long loops
+            for q in queries:
+                if not q:
+                    continue
+                try:
+                    # per-term fetch a few candidates (we'll dedupe later)
+                    items = fetch_youtube_videos(q, max_results=6, api_key=youtube_key) or []
+                except Exception as e:
+                    # keep going on partial failures, but log
+                    print("YouTube fetch error for query:", q, str(e))
+                    items = []
+                for it in items:
+                    vid = it.get("videoId")
+                    if not vid or vid in seen_ids:
+                        continue
+                    # allow items even if filter rejects — we still keep a fallback
+                    if _is_relevant(it):
+                        seen_ids.add(vid)
+                        collected.append(it)
+                    else:
+                        # keep less-relevant ones in a separate bucket (if we need to fill)
+                        collected.append({**it, "_less_relevant": True})
+                # stop early if we already have plenty
+                if len(collected) >= max_results * 6:
+                    break
+        else:
+            # No API key — leave collected empty so curated fallback is used
             collected = []
-            for term in build_search_terms(query):
-                items = fetch_youtube_videos(term, max_results=max_results, api_key=youtube_key)
-                collected.extend(items)
-            filtered = [v for v in collected if is_relevant_title(v.get("title", ""))]
-            seen_ids, unique = set(), []
-            for v in filtered:
-                vid = v.get("videoId")
-                if vid and vid not in seen_ids:
-                    seen_ids.add(vid)
-                    unique.append(v)
-            videos = unique[:max_results * 2]
-        except Exception as e:
-            print("YouTube error:", e)
-            videos = []
+    except Exception as e:
+        # unexpected error — print and continue to fallback
+        print("Error during video collection:", e)
+        collected = []
 
-    if not videos:
-        videos = curated_for_query(query, max_results=max_results * 3)
+    # Deduplicate while preferring relevant items (those without _less_relevant)
+    ordered = []
+    seen = set()
+    for v in collected:
+        vid = v.get("videoId")
+        if not vid or vid in seen:
+            continue
+        # prefer relevant items first
+        if v.get("_less_relevant"):
+            ordered.append(v)  # appended later in ordering
+        else:
+            ordered.insert(0, v)  # push relevant ones to front
+        seen.add(vid)
 
-    for v in videos:
+    # If still empty, use curated fallback
+    if not ordered:
+        ordered = curated_for_query(query_str or (", ".join(kp_list) if kp_list else ""), max_results=max_results * 3)
+
+    # Normalize url, ensure fields exist
+    for v in ordered:
         if "videoId" in v and not v.get("url"):
-            v["url"] = f"https://www.youtube.com/watch?v={v['videoId']}"
+            v["url"] = f"https://www.youtube.com/watch?v={v.get('videoId')}"
 
-    def safe_int(x): return int(x) if str(x).isdigit() else 0
-    videos.sort(key=lambda v: safe_int(v.get("viewCount", 0)), reverse=True)
-    videos = videos[:max_results]
-    random.shuffle(videos)
+    # Sort by viewCount where present (desc), else keep existing order
+    def _viewcount_key(v):
+        vc = v.get("viewCount") or v.get("view_count") or v.get("statistics", {}).get("viewCount")
+        try:
+            return int(vc)
+        except Exception:
+            return 0
 
-    return jsonify({"videos": videos})
+    ordered.sort(key=_viewcount_key, reverse=True)
+
+    # Final take top N, but keep deterministic helpfulness: keep top (max_results*2) then shuffle lightly to add variety
+    top_pool = ordered[: max_results * 3]
+    # if pool larger than desired, shuffle only to vary but keep the highest-ranked near top
+    if len(top_pool) > max_results:
+        random.shuffle(top_pool)
+    result = top_pool[:max_results]
+
+    return jsonify({"videos": result})
+
+@app.post("/api/ask_question")
+def api_ask_question():
+    """
+    Ask a question about the uploaded PDF text.
+    Requires 'text' (full extracted text) and 'question' (user input).
+    Returns: { answer: "..." }
+    """
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    question = (data.get("question") or "").strip()
+    model = data.get("model", "gemini-2.5-flash")
+
+    if not text or not question:
+        return jsonify({"error": "Missing 'text' or 'question'"}), 400
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return jsonify({"error": "GEMINI_API_KEY not set"}), 500
+
+    client = genai.Client(api_key=api_key)
+    prompt = f"Answer the following question based only on the provided document.\n\nQuestion: {question}\n\nDocument:\n{text[:40000]}"
+
+    try:
+        resp = client.models.generate_content(model=model, contents=prompt)
+        answer = getattr(resp, "text", "").strip() or "No relevant answer found."
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"answer": answer})
 
 
 # ----------------- Entrypoint -----------------

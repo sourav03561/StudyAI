@@ -1,41 +1,51 @@
 import React from "react";
-import { BookOpen, Brain, ListChecks, Video } from "lucide-react";
+import { BookOpen, MessageCircle, Brain, ListChecks, Video } from "lucide-react";
 
 const tabs = [
-  { label: "Summary", icon: <BookOpen /> },
-  { label: "Flashcards", icon: <Brain /> },
-  { label: "Quiz", icon: <ListChecks /> },
-  { label: "Recommended Videos", icon: <Video /> },
+  { label: "Summary", icon: <BookOpen className="w-4 h-4" /> },
+  { label: "Ask", icon: <MessageCircle className="w-4 h-4" /> },
+  { label: "Flashcards", icon: <Brain className="w-4 h-4" /> },
+  { label: "Quiz", icon: <ListChecks className="w-4 h-4" /> },
+  { label: "Recommended Videos", icon: <Video className="w-4 h-4" /> },
 ];
 
 export default function Tabs({ value, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 8 }}>
-      {tabs.map((t) => {
-        const active = t.label === value;
-        return (
-          <button
-            key={t.label}
-            onClick={() => onChange(t.label)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 14px",
-              borderRadius: 8,
-              border: "1px solid rgba(0,0,0,0.06)",
-              background: active ? "#0b74ff" : "#f6f7fb",
-              color: active ? "#fff" : "#111",
-              cursor: "pointer",
-              fontWeight: 600,
-            }}
-            aria-pressed={active}
-          >
-            {t.icon}
-            <span style={{ marginLeft: 4 }}>{t.label}</span>
-          </button>
-        );
-      })}
+    <div
+      style={{
+        display: "flex",
+        gap: "12px",
+        background: "#f4f5f7",
+        borderRadius: "9999px", // full pill shape
+        padding: "6px 10px",
+        justifyContent: "center",
+        alignItems: "center",
+        boxShadow: "inset 0 0 3px rgba(0,0,0,0.05)",
+      }}
+    >
+      {tabs.map((t) => (
+        <button
+          key={t.label}
+          onClick={() => onChange(t.label)}
+          className="tab-btn"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 16px",
+            borderRadius: "9999px",
+            border: value === t.label ? "1px solid #ccc" : "1px solid transparent",
+            background: value === t.label ? "#fff" : "transparent",
+            fontWeight: value === t.label ? "600" : "500",
+            cursor: "pointer",
+            color: value === t.label ? "#000" : "#444",
+            transition: "all 0.2s ease",
+          }}
+        >
+          {t.icon}
+          <span>{t.label}</span>
+        </button>
+      ))}
     </div>
   );
 }
